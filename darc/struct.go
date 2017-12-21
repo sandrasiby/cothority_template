@@ -24,6 +24,12 @@ type Rule struct {
 	Action string
 	//List of users who can perform the action.
 	Subjects *[]*Subject
+	//Expression to express fancy conjunctions.
+	//Of the format {"operator" : [indices]}
+	//Operators can be AND, OR
+	//Indices are the indices of the Subjects array
+	//Example {"AND" : [1, 2]} means Subjects[1] AND Subjects[2]
+	Expression string
 }
 
 //Subject can be either a public key or another Darc.

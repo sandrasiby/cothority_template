@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"strings"
 	"crypto/sha256"
+	"encoding/json"
 
 	"github.com/dedis/protobuf"
 	"gopkg.in/dedis/crypto.v0/abstract"
@@ -88,7 +89,6 @@ func NewSubjectPK(point abstract.Point) *SubjectPK {
 		Point: point,
 	}
 }
-
 
 // Copy all the fields of a Darc
 func (d *Darc) Copy() *Darc {
@@ -266,6 +266,72 @@ func (d *Darc) RuleRemoveSubject(ruleID uint32, subject *Subject) ([]*Rules, err
 	d.Rules = &rules
 	return *d.Rules, nil
 }
+
+func EvaluateExpression(expression string) {
+	in := []byte(expression)
+	var raw interface{}
+	json.Unmarshal(in, &raw)
+	ProcessJson(raw)
+}
+
+var s string
+
+//For now, we just take a JSON expression and convert it into 
+// a string showing evaluation. This will be replaced by actual
+//evaluation when we introduce signatures
+func ProcessJson(raw interface{}) {
+	m := raw.(map[string]interface{})
+	for k, v := range(m) {
+		switch vv := v.(type) {
+			case []interface{}:
+				for i, u := range vv {
+					switch x := u.(type) {
+						case map[string]interface {}:
+							test(x)
+						case string: 
+						 	if i == 0 {
+								s += "(" + x
+							} else {
+								s += " " + k + " " + x
+							} 
+							if i == len(vv) - 1 {
+								s += ")"
+							}							
+							fmt.Println(s)
+						default:
+							fmt.Println("Strange")
+					}
+				}
+			default:
+				fmt.Println("Why does it land here?")
+		}
+	}
+}
+
+// func test(raw interface{}) {
+//   s := ""
+//   m := raw.(map[string]interface{})
+//   for k, v := range(m) {
+//     switch vv := v.(type) {
+//       case []interface{}:
+//           fmt.Println(k, "is an array:")
+          
+//           for i, u := range vv {
+//             fmt.Println(i)
+//             switch x := u.(type) {
+//                 case map[string]interface {}:
+//                    test(x)
+//                 default:
+//                    s += x.(string) + " " + k
+//                    //fmt.Println(i, k, x, reflect.TypeOf(x))
+//             }
+//           }
+//           fmt.Println(s)
+//       default: fmt.Println(v, "hmmm")
+//     }
+//   }
+// }  
+
 
 
 // IncrementVersion updates the version number of the Darc
