@@ -27,36 +27,23 @@ import (
 )
 
 // NewDarc initialises a darc-structure
-func NewDarc(category string, rules *[]*Rule) (*Darc, error) {
+func NewDarc(category string, rules *[]*Rule) *Darc {
 	var ru []*Rule
 	ru = append(ru, *rules...)
-
-	//Ensuring that Group/Individual Darcs have Admin Rule
-	if strings.Compare(category, "Resource") != 0 {
-		if ru.length > 1 {
-			return nil, errors.New("Group/Individual Darcs should have only one rule")
-		}
-		if strings.Compare(ru[0].Action, "Admin") != 0 {
-			return nil, errors.New("Group/Individual Darcs should only have a rule with action = Admin")
-		}
-	}
-
 	return &Darc{
 		Version: 0,
-		Category: category, 
 		Rules: &ru
-	}, nil
+	}
 }
 
 //Use as Darc.NewRule
-func (d *Darc) NewRule(action string, subjects *[]*Subject) *Rule {
-	var id = len(d.Rules)
-	var subs []*ISubject
+func (d *Darc) NewRule(action string, subjects *[]*Subject, expression string) *Rule {
+	var subs []*Subject
 	subs = append(sub, *subjects..)
 	return &Rule{
-		ID: id,
 		Action: action,
 		Subjects: &subs,
+		Expression: &expression
 	}
 }
 
@@ -93,8 +80,7 @@ func NewSubjectPK(point abstract.Point) *SubjectPK {
 // Copy all the fields of a Darc
 func (d *Darc) Copy() *Darc {
 	dCopy := &Darc{
-		Version: d.Version,
-		Category: d.Category
+		Version: d.Version
 	}
 	if d.Rules != nil {
 		rules := append([]*Rule{}, *d.Rules)
@@ -141,6 +127,7 @@ func (d *Darc) GetID() ID {
 	return ID(hash)
 }
 
+//To-do: Add admin rule first?
 //Use as 'Darc.AddRule(rule)'
 func (d *Darc) AddRule(rule *Rule) ([]*Rules, error) {
 	//Check if Admin Rule is trying to be duplicated
@@ -161,7 +148,7 @@ func (d *Darc) AddRule(rule *Rule) ([]*Rules, error) {
 }
 
 //Use as 'Darc.RemoveRule(rule)'
-func (d *Darc) RemoveRule(ruleID uint32) ([]*Rules, error) {
+func (d *Darc) RemoveRule(ruleind uint32) ([]*Rules, error) {
 	var ruleIndex = -1
 	var rules []*Rule
 	if d.Rules == nil {
@@ -169,7 +156,7 @@ func (d *Darc) RemoveRule(ruleID uint32) ([]*Rules, error) {
 	}
 	rules = *d.Rules
 	for i, r := range *d.Rules {
-		if r.ID == ruleID {
+		if i == ruleind {
 			if strings.Compare(r.Action, "Admin") {
 				return nil, errors.New("Cannot remove Admin rule")
 			}
@@ -179,26 +166,20 @@ func (d *Darc) RemoveRule(ruleID uint32) ([]*Rules, error) {
 	if ruleIndex == -1 {
 		return nil, errors.New("Rule is not present in the Darc")
 	}
-
-	//Shifting IDs
-	var newrules []*Rule
-	for i, r := range rules[ruleIndex+1:] {
-		r.ID = r.ID - 1
-		newrules = append(newrules, r) 
-	}
-	rules = append(rules[:ruleIndex], newrules)
+	//Removing rule
+	rules = append(rules[:ruleIndex], rules[ruleIndex+1:]...)
 	d.Rules = &rules
 	return *d.Rules, nil
 }
 
-func (d *Darc) RuleUpdateAction(ruleID uint32, action string) ([]*Rules, error) {
+func (d *Darc) RuleUpdateAction(ruleind uint32, action string) ([]*Rules, error) {
 	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
 	for i, r := range *d.Rules {
-		if r.ID == ruleID {
+		if i == ruleind {
 			ruleIndex = i
 		}
 	}
@@ -211,14 +192,14 @@ func (d *Darc) RuleUpdateAction(ruleID uint32, action string) ([]*Rules, error) 
 }
 
 
-func (d *Darc) RuleAddSubject(ruleID uint32, subject *Subject) ([]*Rules, error) {
+func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
 	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
 	for i, r := range *d.Rules {
-		if r.ID == ruleID {
+		if i == ruleind {
 			ruleIndex = i
 		}
 	}
@@ -233,14 +214,14 @@ func (d *Darc) RuleAddSubject(ruleID uint32, subject *Subject) ([]*Rules, error)
 }
 
 
-func (d *Darc) RuleRemoveSubject(ruleID uint32, subject *Subject) ([]*Rules, error) {
+func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
 	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
 	for i, r := range *d.Rules {
-		if r.ID == ruleID {
+		if i == ruleID {
 			ruleIndex = i
 		}
 	}
@@ -263,6 +244,25 @@ func (d *Darc) RuleRemoveSubject(ruleID uint32, subject *Subject) ([]*Rules, err
 
 	subjects = append(subjects[:subjectIndex], subjects[subjectIndex+1:]...)
 	rules[ruleIndex].Subjects = &subjects
+	d.Rules = &rules
+	return *d.Rules, nil
+}
+
+func (d *Darc) RuleUpdateExpression(ruleind uint32, expression string) ([]*Rules, error) {
+	var ruleIndex = -1
+	rules = *d.Rules
+	if d.Rules == nil {
+		return nil, errors.New("Empty rule list")
+	}
+	for i, r := range *d.Rules {
+		if i == ruleind {
+			ruleIndex = i
+		}
+	}
+	if ruleIndex == -1 {
+		return nil, errors.New("Rule ID not found")
+	}
+	rules[ruleIndex].Expression = expression
 	d.Rules = &rules
 	return *d.Rules, nil
 }
@@ -308,37 +308,10 @@ func ProcessJson(raw interface{}) {
 	}
 }
 
-// func test(raw interface{}) {
-//   s := ""
-//   m := raw.(map[string]interface{})
-//   for k, v := range(m) {
-//     switch vv := v.(type) {
-//       case []interface{}:
-//           fmt.Println(k, "is an array:")
-          
-//           for i, u := range vv {
-//             fmt.Println(i)
-//             switch x := u.(type) {
-//                 case map[string]interface {}:
-//                    test(x)
-//                 default:
-//                    s += x.(string) + " " + k
-//                    //fmt.Println(i, k, x, reflect.TypeOf(x))
-//             }
-//           }
-//           fmt.Println(s)
-//       default: fmt.Println(v, "hmmm")
-//     }
-//   }
-// }  
-
-
-
 // IncrementVersion updates the version number of the Darc
 func (d *Darc) IncrementVersion() {
 	d.Version++
 }
-
 
 // IsNull returns true if this DarcID is not initialised.
 func (di ID) IsNull() bool {
