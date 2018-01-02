@@ -191,7 +191,6 @@ func (d *Darc) RuleUpdateAction(ruleind uint32, action string) ([]*Rules, error)
 	return *d.Rules, nil
 }
 
-
 func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
 	var ruleIndex = -1
 	rules = *d.Rules
@@ -212,7 +211,6 @@ func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error
 	d.Rules = &rules
 	return *d.Rules, nil
 }
-
 
 func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
 	var ruleIndex = -1
@@ -305,6 +303,128 @@ func ProcessJson(raw interface{}) {
 			default:
 				fmt.Println("Why does it land here?")
 		}
+	}
+}
+
+func (r *Request) CopyReq() *Request {
+	rCopy := &Request{
+		DarcID: r.DarcID,
+		RuleID: r.RuleID,
+		Requester: r.Requester
+	}
+	return rCopy
+}
+
+func (s *Signer) Sign(req *Request) ([]byte, error) {
+	rc := req.CopyReq()
+	b, err := protobuf.Encode(rc)
+	if err != nil {
+		return nil, err
+	}
+	if b == nil {
+		return nil, errors.New("nothing to sign, message is empty")
+	}
+	if s.Ed25519 != nil {
+		key, err := s.GetPrivate()
+		if err != nil {
+			return nil, errors.New("could not retrieve a private key")
+		}
+		return sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+	}
+	return nil, errors.New("signer is of unknown type")
+}
+
+func (s *Signer) GetPrivate() (abstract.Scalar, error) {
+	if s.Ed25519 != nil {
+		if s.Ed25519.Secret != nil {
+			return s.Ed25519.Secret, nil
+		}
+		return nil, errors.New("signer lacks a private key")
+	}
+	return nil, errors.New("signer is of unknown type")
+}
+
+func Verify(req *Request, sig []byte, darcs *[]*Darc) error {
+	//Check if signature is correct
+	if sig == nil || len(sig) == 0 {
+		return errors.New("No signature available")
+	}
+	//Get path from rule to requester, check if it is correct
+	verpath, err := VerifyPath(darcs, req)
+	if err != nil {
+		return err
+	}
+	//Check expression
+}
+
+func VerifyPath(darcs *[]*Darc, req *Request) error {
+	//Find Darc from request DarcID
+	targetDarc, err := FindDarc(darcs, req.DarcID)
+	if err != nil {
+		return err
+	}
+	rules := targetDarc.Rules
+	targetRule, err := FindRule(rules, req.RuleID)
+	if err != nil {
+		return err
+	}
+	requester := req.Requester 
+	sub, err = targetRule.Subjects
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FindSubject(subjects *[]*Subject, requester) error {
+	for i, s := range subjects {
+		if s == requester {
+			return nil
+		} else if s.SubjectDarc {
+			targetDarc, err := FindDarc(darcs, req.DarcID)
+			if err != nil {
+				return err
+			}
+			subs = targetDarc.Rules[0].Subjects
+			sub, err := FindSubject(subs, requester)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return errors.New("Subject not found")
+}
+
+func FindDarc(darcs *[]*Darc, darcid) (*Darc, error) {
+	var darcIndex = -1
+	for i, d := range darcs {
+		if d.GetID() == darcid {
+			darcIndex = i
+			return d, nil
+		}
+	}
+	if darcIndex == -1 {
+		return nil, errors.New("Invalid DarcID")
+	}
+}
+
+func FindRule(rules *[]*Rules, ruleid) (*Rules, error) {
+	if (ruleid > rules.length-1) || (ruleid < 0) {
+		return nil, errors.New("Invalid RuleID in request")
+	}
+	return rules[ruleid], nil
+} 
+
+// NewEd25519Signer initializes a new Ed25519Signer given a public and private keys.
+// If any of the given values is nil or both are nil, then a new key pair is generated.
+func NewEd25519Signer(point abstract.Point, secret abstract.Scalar) *Ed25519Signer {
+	if point == nil || secret == nil {
+		kp := config.NewKeyPair(network.Suite)
+		point, secret = kp.Public, kp.Secret
+	}
+	return &Ed25519Signer{
+		Point:  point,
+		Secret: secret,
 	}
 }
 

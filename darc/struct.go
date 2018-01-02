@@ -55,3 +55,19 @@ type Request struct {
 	//Requester's details
 	Requester *Subject
 }
+
+type Signature struct {
+	Signature []byte
+}
+
+// Signer is a generic structure that can hold different types of signers
+// TODO Make it an interface
+type Signer struct {
+	Ed25519 *Ed25519Signer
+}
+
+// Ed25519Signer holds a public and private keys necessary to sign Darcs
+type Ed25519Signer struct {
+	Point  abstract.Point
+	Secret abstract.Scalar
+}
