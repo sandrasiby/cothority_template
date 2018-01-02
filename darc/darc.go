@@ -29,7 +29,7 @@ import (
 // NewDarc initialises a darc-structure
 func NewDarc(category string, rules *[]*Rule) *Darc {
 	var ru []*Rule
-	ru = append(ru, *rules...)
+	ru = append(ru, *rules..)
 	return &Darc{
 		Version: 0,
 		Rules: &ru
@@ -315,7 +315,7 @@ func (r *Request) CopyReq() *Request {
 	return rCopy
 }
 
-func (s *Signer) Sign(req *Request) ([]byte, error) {
+func (s *Signer) Sign(req *Request) (*Signature, error) {
 	rc := req.CopyReq()
 	b, err := protobuf.Encode(rc)
 	if err != nil {
@@ -329,7 +329,23 @@ func (s *Signer) Sign(req *Request) ([]byte, error) {
 		if err != nil {
 			return nil, errors.New("could not retrieve a private key")
 		}
-		return sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+		pub, err := s.GetPublic()
+		if err != nil {
+			return nil, errors.New("could not retrieve a public key")
+		}
+		signature := sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+		signer := &SubjectPK{Point: pub}
+		return &Signature{Signature: signature, Signer: signer}, nil
+	}
+	return nil, errors.New("signer is of unknown type")
+}
+
+func (s *Signer) GetPublic() (abstract.Point, error) {
+	if s.Ed25519 != nil {
+		if s.Ed25519.Point != nil {
+			return s.Ed25519.Point, nil
+		}
+		return nil, errors.New("signer lacks a public key")
 	}
 	return nil, errors.New("signer is of unknown type")
 }
@@ -344,20 +360,61 @@ func (s *Signer) GetPrivate() (abstract.Scalar, error) {
 	return nil, errors.New("signer is of unknown type")
 }
 
-func Verify(req *Request, sig []byte, darcs *[]*Darc) error {
+func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	//Check if signature is correct
 	if sig == nil || len(sig) == 0 {
 		return errors.New("No signature available")
 	}
-	//Get path from rule to requester, check if it is correct
-	verpath, err := VerifyPath(darcs, req)
+	rc := req.CopyReq()
+	b, err := protobuf.Encode(rc)
+	if err != nil {
+		return err
+	}
+	if b == nil {
+		return errors.New("nothing to verify, message is empty")
+	}
+	pub := sig.Signer.Point
+	err := sign.VerifySchnorr(network.Suite, pub, b, sig.Signature)
+	if err != nil {
+		return err
+	}
+	//Check if path from rule to requester is correct
+	err := VerifyPath(darcs, req)
+	if err != nil {
+		return err
+	}
+	//Check that signer exists in the requester ID
+	err := VerifySigner(req, sig)
 	if err != nil {
 		return err
 	}
 	//Check expression
 }
 
-func VerifyPath(darcs *[]*Darc, req *Request) error {
+func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
+	requester := req.Requester
+	signer := sig.Signer
+	if requester.PK != nil {
+		if requester.PK == signer {
+			return nil
+		}
+		else {
+			return errors.New("Signer not found in ID")
+		}
+	} else if requester.Darc != nil {
+		targetDarc, err := FindDarc(darcs, requester.Darc.ID)
+		if err != nil {
+			return err
+		}
+		subs = targetDarc.Rules[0].Subjects
+		err := FindSubject(subs, &Subject{PK: signer})
+		return err
+	} else {
+		return errors.New("Empty Requester")
+	}
+}
+
+func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	//Find Darc from request DarcID
 	targetDarc, err := FindDarc(darcs, req.DarcID)
 	if err != nil {
@@ -369,18 +426,19 @@ func VerifyPath(darcs *[]*Darc, req *Request) error {
 		return err
 	}
 	requester := req.Requester 
-	sub, err = targetRule.Subjects
+	subs, err = targetRule.Subjects
 	if err != nil {
 		return err
 	}
-	return nil
+	err := FindSubject(subs, requester)
+	return err
 }
 
-func FindSubject(subjects *[]*Subject, requester) error {
+func FindSubject(subjects *[]*Subject, requester *Subject) error {
 	for i, s := range subjects {
 		if s == requester {
 			return nil
-		} else if s.SubjectDarc {
+		} else if s.SubjectDarc != nil {
 			targetDarc, err := FindDarc(darcs, req.DarcID)
 			if err != nil {
 				return err
@@ -395,17 +453,12 @@ func FindSubject(subjects *[]*Subject, requester) error {
 	return errors.New("Subject not found")
 }
 
-func FindDarc(darcs *[]*Darc, darcid) (*Darc, error) {
-	var darcIndex = -1
-	for i, d := range darcs {
-		if d.GetID() == darcid {
-			darcIndex = i
-			return d, nil
-		}
+func FindDarc(darcs map[string]*Darc, darcid) (*Darc, error) {
+	d, ok := darcs[string(darcid)]
+	if ok == false {
+		return, errors.New("Invalid DarcID")
 	}
-	if darcIndex == -1 {
-		return nil, errors.New("Invalid DarcID")
-	}
+	return d, nil
 }
 
 func FindRule(rules *[]*Rules, ruleid) (*Rules, error) {

@@ -58,6 +58,7 @@ type Request struct {
 
 type Signature struct {
 	Signature []byte
+	Signer SubjectPK
 }
 
 // Signer is a generic structure that can hold different types of signers
