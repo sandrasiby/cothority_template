@@ -173,61 +173,43 @@ func (d *Darc) RemoveRule(ruleind uint32) ([]*Rules, error) {
 }
 
 func (d *Darc) RuleUpdateAction(ruleind uint32, action string) ([]*Rules, error) {
-	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	for i, r := range *d.Rules {
-		if i == ruleind {
-			ruleIndex = i
-		}
+	if (ruleind > rules.length-1) || (ruleind < 0) {
+		return nil, errors.New("Invalid RuleID in request")
 	}
-	if ruleIndex == -1 {
-		return nil, errors.New("Rule ID not found")
-	}
-	rules[ruleIndex].Action = action
+	rules[ruleind].Action = action
 	d.Rules = &rules
 	return *d.Rules, nil
 }
 
 func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
-	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	for i, r := range *d.Rules {
-		if i == ruleind {
-			ruleIndex = i
-		}
+	if (ruleind > rules.length-1) || (ruleind < 0) {
+		return nil, errors.New("Invalid RuleID in request")
 	}
-	if ruleIndex == -1 {
-		return nil, errors.New("Rule ID not found")
-	}
-	var subjects = *rules[ruleIndex].Subjects
+	var subjects = *rules[ruleind].Subjects
 	subjects = append(subjects, subject)
-	rules[ruleIndex].Subjects = &subjects
+	rules[ruleind].Subjects = &subjects
 	d.Rules = &rules
 	return *d.Rules, nil
 }
 
 func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
-	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	for i, r := range *d.Rules {
-		if i == ruleID {
-			ruleIndex = i
-		}
-	}
-	if ruleIndex == -1 {
-		return nil, errors.New("Rule ID not found")
+	if (ruleind > rules.length-1) || (ruleind < 0) {
+		return nil, errors.New("Invalid RuleID in request")
 	}
 	var subjectIndex = -1
-	var subjects = *rules[ruleIndex].Subjects
+	var subjects = *rules[ruleind].Subjects
 	if subjects == nil {
 		return nil, errors.New("Empty subjects list")
 	}
@@ -239,28 +221,21 @@ func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, er
 	if subjectIndex == -1 {
 		return nil, errors.New("Subject ID not found")
 	}
-
 	subjects = append(subjects[:subjectIndex], subjects[subjectIndex+1:]...)
-	rules[ruleIndex].Subjects = &subjects
+	rules[ruleind].Subjects = &subjects
 	d.Rules = &rules
 	return *d.Rules, nil
 }
 
 func (d *Darc) RuleUpdateExpression(ruleind uint32, expression string) ([]*Rules, error) {
-	var ruleIndex = -1
 	rules = *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	for i, r := range *d.Rules {
-		if i == ruleind {
-			ruleIndex = i
-		}
+	if (ruleind > rules.length-1) || (ruleind < 0) {
+		return nil, errors.New("Invalid RuleID in request")
 	}
-	if ruleIndex == -1 {
-		return nil, errors.New("Rule ID not found")
-	}
-	rules[ruleIndex].Expression = expression
+	rules[ruleind].Expression = expression
 	d.Rules = &rules
 	return *d.Rules, nil
 }
