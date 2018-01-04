@@ -27,7 +27,7 @@ import (
 )
 
 // NewDarc initialises a darc-structure
-func NewDarc(category string, rules *[]*Rule) *Darc {
+func NewDarc(rules *[]*Rule) *Darc {
 	var ru []*Rule
 	ru = append(ru, *rules..)
 	return &Darc{
@@ -278,6 +278,15 @@ func ProcessJson(raw interface{}) {
 			default:
 				fmt.Println("Why does it land here?")
 		}
+	}
+}
+
+// NewDarc initialises a darc-structure
+func NewRequest(darcid ID, ruleid uint32, requester *Subject) *Request {
+	return &Request{
+		DarcID: darcid,
+		RuleID: ruleid,
+		Requester: requester
 	}
 }
 
