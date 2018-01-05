@@ -51,7 +51,7 @@ type Request struct {
 	//ID of the Darc having the access control policy
 	DarcID ID
 	//ID showing allowed rule
-	RuleID uint32
+	RuleID int
 	//Requester's details
 	Requester *Subject
 }

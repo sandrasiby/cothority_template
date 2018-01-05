@@ -29,21 +29,21 @@ import (
 // NewDarc initialises a darc-structure
 func NewDarc(rules *[]*Rule) *Darc {
 	var ru []*Rule
-	ru = append(ru, *rules..)
+	ru = append(ru, *rules...)
 	return &Darc{
 		Version: 0,
-		Rules: &ru
+		Rules: &ru,
 	}
 }
 
 //Use as Darc.NewRule
 func (d *Darc) NewRule(action string, subjects *[]*Subject, expression string) *Rule {
 	var subs []*Subject
-	subs = append(sub, *subjects..)
+	subs = append(subs, *subjects...)
 	return &Rule{
 		Action: action,
 		Subjects: &subs,
-		Expression: &expression
+		Expression: expression,
 	}
 }
 
@@ -80,10 +80,10 @@ func NewSubjectPK(point abstract.Point) *SubjectPK {
 // Copy all the fields of a Darc
 func (d *Darc) Copy() *Darc {
 	dCopy := &Darc{
-		Version: d.Version
+		Version: d.Version,
 	}
 	if d.Rules != nil {
-		rules := append([]*Rule{}, *d.Rules)
+		rules := append([]*Rule{}, *d.Rules...)
 		dCopy.Rules = &rules
 	}
 	return dCopy
@@ -129,11 +129,11 @@ func (d *Darc) GetID() ID {
 
 //To-do: Add admin rule first?
 //Use as 'Darc.AddRule(rule)'
-func (d *Darc) AddRule(rule *Rule) ([]*Rules, error) {
+func (d *Darc) AddRule(rule *Rule) ([]*Rule, error) {
 	//Check if Admin Rule is trying to be duplicated
 	if strings.Compare(rule.Action, "Admin") == 0 {
-		for i, r := range *d.Rules {
-			if strings.Compare(r.Action, "Admin") {
+		for _, r := range *d.Rules {
+			if strings.Compare(r.Action, "Admin") == 0 {
 				return nil, errors.New("Cannot have two Admin rules")
 			}
 		}
@@ -148,7 +148,7 @@ func (d *Darc) AddRule(rule *Rule) ([]*Rules, error) {
 }
 
 //Use as 'Darc.RemoveRule(rule)'
-func (d *Darc) RemoveRule(ruleind uint32) ([]*Rules, error) {
+func (d *Darc) RemoveRule(ruleind int) ([]*Rule, error) {
 	var ruleIndex = -1
 	var rules []*Rule
 	if d.Rules == nil {
@@ -157,7 +157,7 @@ func (d *Darc) RemoveRule(ruleind uint32) ([]*Rules, error) {
 	rules = *d.Rules
 	for i, r := range *d.Rules {
 		if i == ruleind {
-			if strings.Compare(r.Action, "Admin") {
+			if strings.Compare(r.Action, "Admin") == 0 {
 				return nil, errors.New("Cannot remove Admin rule")
 			}
 			ruleIndex = i
@@ -172,12 +172,12 @@ func (d *Darc) RemoveRule(ruleind uint32) ([]*Rules, error) {
 	return *d.Rules, nil
 }
 
-func (d *Darc) RuleUpdateAction(ruleind uint32, action string) ([]*Rules, error) {
-	rules = *d.Rules
+func (d *Darc) RuleUpdateAction(ruleind int, action string) ([]*Rule, error) {
+	rules := *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	if (ruleind > rules.length-1) || (ruleind < 0) {
+	if (ruleind > len(rules)-1) || (ruleind < 0) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	rules[ruleind].Action = action
@@ -185,12 +185,12 @@ func (d *Darc) RuleUpdateAction(ruleind uint32, action string) ([]*Rules, error)
 	return *d.Rules, nil
 }
 
-func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
-	rules = *d.Rules
+func (d *Darc) RuleAddSubject(ruleind int, subject *Subject) ([]*Rule, error) {
+	rules := *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	if (ruleind > rules.length-1) || (ruleind < 0) {
+	if (ruleind > len(rules)-1) || (ruleind < 0) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	var subjects = *rules[ruleind].Subjects
@@ -200,12 +200,12 @@ func (d *Darc) RuleAddSubject(ruleind uint32, subject *Subject) ([]*Rules, error
 	return *d.Rules, nil
 }
 
-func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, error) {
-	rules = *d.Rules
+func (d *Darc) RuleRemoveSubject(ruleind int, subject *Subject) ([]*Rule, error) {
+	rules := *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	if (ruleind > rules.length-1) || (ruleind < 0) {
+	if (ruleind > len(rules)-1) || (ruleind < 0) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	var subjectIndex = -1
@@ -227,12 +227,12 @@ func (d *Darc) RuleRemoveSubject(ruleind uint32, subject *Subject) ([]*Rules, er
 	return *d.Rules, nil
 }
 
-func (d *Darc) RuleUpdateExpression(ruleind uint32, expression string) ([]*Rules, error) {
-	rules = *d.Rules
+func (d *Darc) RuleUpdateExpression(ruleind int, expression string) ([]*Rule, error) {
+	rules := *d.Rules
 	if d.Rules == nil {
 		return nil, errors.New("Empty rule list")
 	}
-	if (ruleind > rules.length-1) || (ruleind < 0) {
+	if (ruleind > len(rules)-1) || (ruleind < 0) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	rules[ruleind].Expression = expression
@@ -260,7 +260,7 @@ func ProcessJson(raw interface{}) {
 				for i, u := range vv {
 					switch x := u.(type) {
 						case map[string]interface {}:
-							test(x)
+							ProcessJson(x)
 						case string: 
 						 	if i == 0 {
 								s += "(" + x
@@ -282,11 +282,11 @@ func ProcessJson(raw interface{}) {
 }
 
 // NewDarc initialises a darc-structure
-func NewRequest(darcid ID, ruleid uint32, requester *Subject) *Request {
+func NewRequest(darcid ID, ruleid int, requester *Subject) *Request {
 	return &Request{
 		DarcID: darcid,
 		RuleID: ruleid,
-		Requester: requester
+		Requester: requester,
 	}
 }
 
@@ -294,7 +294,7 @@ func (r *Request) CopyReq() *Request {
 	rCopy := &Request{
 		DarcID: r.DarcID,
 		RuleID: r.RuleID,
-		Requester: r.Requester
+		Requester: r.Requester,
 	}
 	return rCopy
 }
@@ -317,9 +317,9 @@ func (s *Signer) Sign(req *Request) (*Signature, error) {
 		if err != nil {
 			return nil, errors.New("could not retrieve a public key")
 		}
-		signature := sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+		signature, _ := sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
 		signer := &SubjectPK{Point: pub}
-		return &Signature{Signature: signature, Signer: signer}, nil
+		return &Signature{Signature: signature, Signer: *signer}, nil
 	}
 	return nil, errors.New("signer is of unknown type")
 }
@@ -346,7 +346,7 @@ func (s *Signer) GetPrivate() (abstract.Scalar, error) {
 
 func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	//Check if signature is correct
-	if sig == nil || len(sig) == 0 {
+	if sig == nil || len(sig.Signature) == 0 {
 		return errors.New("No signature available")
 	}
 	rc := req.CopyReq()
@@ -358,31 +358,31 @@ func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 		return errors.New("nothing to verify, message is empty")
 	}
 	pub := sig.Signer.Point
-	err := sign.VerifySchnorr(network.Suite, pub, b, sig.Signature)
+	err = sign.VerifySchnorr(network.Suite, pub, b, sig.Signature)
 	if err != nil {
 		return err
 	}
 	//Check if path from rule to requester is correct
-	err := VerifyPath(darcs, req)
+	err = VerifyPath(darcs, req)
 	if err != nil {
 		return err
 	}
 	//Check that signer exists in the requester ID
-	err := VerifySigner(req, sig)
+	err = VerifySigner(req, sig, darcs)
 	if err != nil {
 		return err
 	}
 	//Check expression
+	return err
 }
 
 func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	requester := req.Requester
 	signer := sig.Signer
 	if requester.PK != nil {
-		if requester.PK == signer {
+		if requester.PK == &signer {
 			return nil
-		}
-		else {
+		} else {
 			return errors.New("Signer not found in ID")
 		}
 	} else if requester.Darc != nil {
@@ -390,8 +390,8 @@ func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
 		if err != nil {
 			return err
 		}
-		subs = targetDarc.Rules[0].Subjects
-		err := FindSubject(subs, &Subject{PK: signer})
+		subs := *(*targetDarc.Rules)[0].Subjects
+		err = FindSubject(subs, &Subject{PK: &signer}, darcs)
 		return err
 	} else {
 		return errors.New("Empty Requester")
@@ -404,31 +404,28 @@ func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	if err != nil {
 		return err
 	}
-	rules := targetDarc.Rules
+	rules := *targetDarc.Rules
 	targetRule, err := FindRule(rules, req.RuleID)
 	if err != nil {
 		return err
 	}
 	requester := req.Requester 
-	subs, err = targetRule.Subjects
-	if err != nil {
-		return err
-	}
-	err := FindSubject(subs, requester)
+	subs := *targetRule.Subjects
+	err = FindSubject(subs, requester, darcs)
 	return err
 }
 
-func FindSubject(subjects *[]*Subject, requester *Subject) error {
-	for i, s := range subjects {
+func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc) error {
+	for _, s := range subjects {
 		if s == requester {
 			return nil
-		} else if s.SubjectDarc != nil {
-			targetDarc, err := FindDarc(darcs, req.DarcID)
+		} else if s.Darc != nil {
+			targetDarc, err := FindDarc(darcs, s.Darc.ID)
 			if err != nil {
 				return err
 			}
-			subs = targetDarc.Rules[0].Subjects
-			sub, err := FindSubject(subs, requester)
+			subs := *(*targetDarc.Rules)[0].Subjects
+			err = FindSubject(subs, requester, darcs, )
 			if err != nil {
 				return err
 			}
@@ -437,16 +434,16 @@ func FindSubject(subjects *[]*Subject, requester *Subject) error {
 	return errors.New("Subject not found")
 }
 
-func FindDarc(darcs map[string]*Darc, darcid) (*Darc, error) {
+func FindDarc(darcs map[string]*Darc, darcid ID) (*Darc, error) {
 	d, ok := darcs[string(darcid)]
 	if ok == false {
-		return, errors.New("Invalid DarcID")
+		return nil, errors.New("Invalid DarcID")
 	}
 	return d, nil
 }
 
-func FindRule(rules *[]*Rules, ruleid) (*Rules, error) {
-	if (ruleid > rules.length-1) || (ruleid < 0) {
+func FindRule(rules []*Rule, ruleid int) (*Rule, error) {
+	if (ruleid > len(rules)-1) || (ruleid < 0) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	return rules[ruleid], nil

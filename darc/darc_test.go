@@ -3,7 +3,7 @@ package darc
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+//	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/dedis/onet.v1/log"
 )
@@ -11,7 +11,7 @@ import (
 func TestDarc(t *testing.T) {
 	var rules []*Rule
 	for i := 0; i < 2; i++ {
-		rules = append(rules, createRule())
+		rules = append(rules, createRule().rule)
 	}
 	d := NewDarc(&rules)
 	for i, rule := range rules {
@@ -23,7 +23,7 @@ func TestDarc_Copy(t *testing.T) {
 	d1 := createDarc().darc
 	d2 := d1.Copy()
 	d1.Version = 3
-	d1.AddRule(createRule())
+	d1.AddRule(createRule().rule)
 	require.NotEqual(t, len(*d1.Rules), len(*d2.Rules))
 	require.NotEqual(t, d1.Version, d2.Version)
 	d2 = d1.Copy()
@@ -32,7 +32,7 @@ func TestDarc_Copy(t *testing.T) {
 
 func TestDarc_AddRule(t *testing.T) {
 	d := createDarc().darc
-	rule := createRule()
+	rule := createRule().rule
 	d.AddRule(rule)
 	require.Equal(t, rule, (*d.Rules)[len(*d.Rules)-1])
 }
@@ -40,7 +40,7 @@ func TestDarc_AddRule(t *testing.T) {
 func TestDarc_RemoveRule(t *testing.T) {
 	d1 := createDarc().darc
 	d2 := d1.Copy()
-	rule := createRule()
+	rule := createRule().rule
 	d2.AddRule(rule)
 	require.NotEqual(t, len(*d1.Rules), len(*d2.Rules))
 	d2.RemoveRule(len(*d2.Rules)-1)
@@ -49,12 +49,13 @@ func TestDarc_RemoveRule(t *testing.T) {
 
 func TestDarc_RuleUpdateAction(t *testing.T) {
 	d1 := createDarc().darc
-	rule := createRule()
+	rule := createRule().rule
 	d1.AddRule(rule)
 	d2 := d1.Copy()
 	ind := len(*d2.Rules)-1
-	require.Equal(t, *d1.Rules[ind].Action, *d2.Rules[ind].Action)
-	d2.RuleUpdateAction(l, "TestUpdate")
+	require.Equal(t, (*d1.Rules)[ind].Action, (*d2.Rules)[ind].Action)
+	d2.RuleUpdateAction(ind, "TestUpdate")
+	log.Lvl2((*d1.Rules)[ind].Action)
 	require.NotEqual(t, (*d1.Rules)[ind].Action, (*d2.Rules)[ind].Action)
 }
 
@@ -62,8 +63,10 @@ func TestDarc_RuleAddSubject(t *testing.T) {
 	d := createDarc().darc
 	s := createSubject_PK()
 	d.RuleAddSubject(0, s)
-	ind := len((*d.Rules)[0].Subjects)-1
-	require.Equal(t, s, (*d.Rules)[0].Subjects[ind])
+	ind := len(*(*d.Rules)[0].Subjects)-1
+	r1 := (*d.Rules)[0]
+	s1 := (*r1.Subjects)[ind]
+	require.Equal(t, s, s1)
 }
 
 func TestDarc_RuleRemoveSubject(t *testing.T) {
@@ -71,48 +74,51 @@ func TestDarc_RuleRemoveSubject(t *testing.T) {
 	d2 := d1.Copy()
 	s := createSubject_PK()
 	d2.RuleAddSubject(0, s)
-	require.NotEqual(t, len(*d1.Rules[0].Subjects), len(*d2.Rules[0].Subjects))
+	require.NotEqual(t, len(*(*d1.Rules)[0].Subjects), len(*(*d2.Rules)[0].Subjects))
 	d2.RuleRemoveSubject(0, s)
-	require.Equal(t, len(*d1.Rules[0].Subjects), len(*d2.Rules[0].Subjects))
+	require.Equal(t, len(*(*d1.Rules)[0].Subjects), len(*(*d2.Rules)[0].Subjects))
 }
 
 func TestDarc_RuleUpdateExpression(t *testing.T) {
 	d1 := createDarc().darc
-	rule := createRule()
+	rule := createRule().rule
 	d1.AddRule(rule)
 	d2 := d1.Copy()
 	ind := len(*d2.Rules)-1
-	require.Equal(t, *d1.Rules[ind].Expression, *d2.Rules[ind].Expression)
-	d2.RuleUpdateExpression(l, `{"or" : [0,1]}`)
-	require.NotEqual(t, *d1.Rules[ind].Expression, *d2.Rules[ind].Expression)
+	require.Equal(t, (*d1.Rules)[ind].Expression, (*d2.Rules)[ind].Expression)
+	d2.RuleUpdateExpression(ind, `{"or" : [0,1]}`)
+	require.NotEqual(t, (*d1.Rules)[ind].Expression, (*d2.Rules)[ind].Expression)
 }
 
 func TestRequest_Copy(t *testing.T) {
-	req1, _ := createRequest()
+	req, _ := createRequest()
+	req1 := req.request
 	req2 := req1.CopyReq()
 	req1.RuleID = 1000
 	require.NotEqual(t, req1.RuleID, req2.RuleID)
 	require.Equal(t, req1.DarcID, req2.DarcID)
 	require.Equal(t, req1.Requester, req2.Requester)
-	req2 := req1.CopyReq()
+	req2 = req1.CopyReq()
 	require.Equal(t, req1.RuleID, req2.RuleID)
 }
 
 func TestRequest_Sign(t *testing.T) {
-	req, signer := createRequest()
+	r, signer := createRequest()
+	req := r.request
 	sig, err := signer.Sign(req)
 	if err != nil {
 		log.ErrFatal(err)
 	}
+	log.Lvl2("Signature:", sig.Signature)
 }
 
-func TestRequest_Verify(t *testing.T) {
-	req, signer := createRequest()
-	sig, err := signer.Sign(req)
-	if err != nil {
-		log.ErrFatal(err)
-	}
-}
+// func TestRequest_Verify(t *testing.T) {
+// 	req, signer := createRequest()
+// 	sig, err := signer.Sign(req.request)
+// 	if err != nil {
+// 		log.ErrFatal(err)
+// 	}
+// }
 
 func TestDarc_IncrementVersion(t *testing.T) {
 	d := createDarc().darc
@@ -152,7 +158,7 @@ type testRequest struct {
 func createDarc() *testDarc {
 	td := &testDarc{}
 	r := createAdminRule()
-	td.rules = append(td, rule)
+	td.rules = append(td.rules, r.rule)
 	td.darc = NewDarc(&td.rules)
 	return td
 }
@@ -163,9 +169,9 @@ func createAdminRule() *testRule {
 	expression := `{"and" : [0, 1]}`
 	for i := 0; i < 3; i++ {
 		s := createSubject_PK()
-		tr.subjects = append(tr, s)
+		tr.subjects = append(tr.subjects, s)
 	}
-	tr.rule = NewRule(action, &tr.subjects, expression)
+	tr.rule = &Rule{Action: action, Subjects: &tr.subjects, Expression: expression}
 	return tr
 }
 
@@ -175,20 +181,21 @@ func createRule() *testRule {
 	expression := `{}`
 	s1 := createSubject_PK()
 	s2 := createSubject_Darc()
-	tr.subjects = append(tr, s1)
-	tr.subjects = append(tr, s2)
-	tr.rule = NewRule(action, &tr.subjects, expression)
+	tr.subjects = append(tr.subjects, s1)
+	tr.subjects = append(tr.subjects, s2)
+	tr.rule = &Rule{Action: action, Subjects: &tr.subjects, Expression: expression}
 	return tr
 }
 
 func createSubject_Darc() *Subject {
 	rule := createAdminRule().rule
-	var rules *[]*Rule
+	var rules []*Rule
 	rules = append(rules, rule)
-	darc := NewDarc(rules)
+	darc := NewDarc(&rules)
 	id := darc.GetID()
 	subjectdarc := NewSubjectDarc(id)
-	subject, err := NewSubject(subjectdarc, nil)
+	subject, _ := NewSubject(subjectdarc, nil)
+	return subject
 }
 
 func createSubject_PK() *Subject {
@@ -204,7 +211,7 @@ func createSigner() *Signer {
 func createSignerSubject() (*Signer, *Subject) {
 	edSigner := NewEd25519Signer(nil, nil)
 	signer := &Signer{Ed25519: edSigner}
-	subjectpk := NewSubjectPK(signer.Point)
+	subjectpk := NewSubjectPK(signer.Ed25519.Point)
 	subject, err := NewSubject(nil, subjectpk)
 	log.ErrFatal(err)
 	return signer, subject
