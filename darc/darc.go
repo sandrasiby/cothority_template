@@ -22,6 +22,7 @@ import (
 	"gopkg.in/dedis/crypto.v0/config"
 	"gopkg.in/dedis/crypto.v0/ed25519"
 	"gopkg.in/dedis/crypto.v0/sign"
+	"gopkg.in/dedis/crypto.v0/random"
 	"gopkg.in/dedis/onet.v1/log"
 	"gopkg.in/dedis/onet.v1/network"
 )
@@ -30,7 +31,9 @@ import (
 func NewDarc(rules *[]*Rule) *Darc {
 	var ru []*Rule
 	ru = append(ru, *rules...)
+	id := CreateID()
 	return &Darc{
+		ID: id,
 		Version: 0,
 		Rules: &ru,
 	}
@@ -80,6 +83,7 @@ func NewSubjectPK(point abstract.Point) *SubjectPK {
 // Copy all the fields of a Darc
 func (d *Darc) Copy() *Darc {
 	dCopy := &Darc{
+		ID: d.ID,
 		Version: d.Version,
 	}
 	if d.Rules != nil {
@@ -109,8 +113,18 @@ func NewDarcFromProto(protoDarc []byte) *Darc {
 	return d
 }
 
-// GetID returns the hash of the protobuf-representation of the Darc as its Id.
+func CreateID() ID {
+	idsize := 32
+	id := random.Bytes(idsize, random.Stream)
+	return id
+}
+
 func (d *Darc) GetID() ID {
+	return d.ID
+}
+
+// GetHash returns the hash of the protobuf-representation of the Darc as its Id.
+func (d *Darc) GetHash() ID {
 	// get protobuf representation
 	protoDarc, err := d.ToProto()
 	if err != nil {
@@ -181,6 +195,7 @@ func (d *Darc) RuleUpdateAction(ruleind int, action string) ([]*Rule, error) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	rules[ruleind].Action = action
+	fmt.Println("Rule:", rules[ruleind].Action)
 	d.Rules = &rules
 	return *d.Rules, nil
 }

@@ -9,6 +9,8 @@ type ID []byte
 
 // Darc is the basic structure representing an access control. 
 type Darc struct {
+	//DarcID
+	ID []byte
 	//Version should be monotonically increasing over the evolution of a Darc.
 	Version uint32
 	//List of rules for the access control policy
