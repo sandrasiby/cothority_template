@@ -87,7 +87,12 @@ func (d *Darc) Copy() *Darc {
 		Version: d.Version,
 	}
 	if d.Rules != nil {
-		rules := append([]*Rule{}, *d.Rules...)
+		var rules []*Rule
+		for _, r := range *d.Rules {
+			x := *r
+			rules = append(rules, &x)
+		}
+		//rules := append([]*Rule{}, *d.Rules...)
 		dCopy.Rules = &rules
 	}
 	return dCopy
@@ -195,7 +200,6 @@ func (d *Darc) RuleUpdateAction(ruleind int, action string) ([]*Rule, error) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	rules[ruleind].Action = action
-	fmt.Println("Rule:", rules[ruleind].Action)
 	d.Rules = &rules
 	return *d.Rules, nil
 }
@@ -395,7 +399,7 @@ func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	requester := req.Requester
 	signer := sig.Signer
 	if requester.PK != nil {
-		if requester.PK == &signer {
+		if *requester.PK == signer {
 			return nil
 		} else {
 			return errors.New("Signer not found in ID")

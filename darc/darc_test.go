@@ -2,6 +2,7 @@ package darc
 
 import (
 	"testing"
+	"fmt"
 
 //	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ func TestDarc_Copy(t *testing.T) {
 	require.NotEqual(t, d1.Version, d2.Version)
 	d2 = d1.Copy()
 	require.Equal(t, d1.GetID(), d2.GetID())
+	require.Equal(t, len(*d1.Rules), len(*d2.Rules))
 }
 
 func TestDarc_AddRule(t *testing.T) {
@@ -52,11 +54,12 @@ func TestDarc_RuleUpdateAction(t *testing.T) {
 	rule := createRule().rule
 	d1.AddRule(rule)
 	d2 := d1.Copy()
-	ind := len(*d2.Rules)-1
-	require.Equal(t, (*d1.Rules)[ind].Action, (*d2.Rules)[ind].Action)
-	d2.RuleUpdateAction(ind, "TestUpdate")
-	log.Lvl2((*d1.Rules)[ind].Action)
-	require.NotEqual(t, (*d1.Rules)[ind].Action, (*d2.Rules)[ind].Action)
+	ind1 := len(*d1.Rules)-1
+	ind2 := len(*d2.Rules)-1
+	require.Equal(t, (*d1.Rules)[ind1].Action, (*d2.Rules)[ind2].Action)
+	action := string("TestUpdate")
+	d2.RuleUpdateAction(ind2, action)
+	require.NotEqual(t, (*d1.Rules)[ind1].Action, (*d2.Rules)[ind2].Action)
 }
 
 func TestDarc_RuleAddSubject(t *testing.T) {
@@ -105,20 +108,26 @@ func TestRequest_Copy(t *testing.T) {
 func TestRequest_Sign(t *testing.T) {
 	r, signer := createRequest()
 	req := r.request
-	sig, err := signer.Sign(req)
+	_, err := signer.Sign(req)
 	if err != nil {
 		log.ErrFatal(err)
 	}
-	log.Lvl2("Signature:", sig.Signature)
+	//fmt.Println("Signature:", sig.Signature)
 }
 
-// func TestRequest_Verify(t *testing.T) {
-// 	req, signer := createRequest()
-// 	sig, err := signer.Sign(req.request)
-// 	if err != nil {
-// 		log.ErrFatal(err)
-// 	}
-// }
+func TestRequest_Verify(t *testing.T) {
+	req, signer := createRequest()
+	sig, err := signer.Sign(req.request)
+	if err != nil {
+		log.ErrFatal(err)
+	}
+	err = Verify(req.request, sig, darcMap)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Verification works")
+	}
+}
 
 func TestDarc_IncrementVersion(t *testing.T) {
 	d := createDarc().darc
@@ -141,6 +150,8 @@ func TestSubject(t *testing.T) {
 }
 */
 
+var darcMap = make(map[string]*Darc)
+
 type testDarc struct {
 	darc *Darc
 	rules []*Rule
@@ -160,6 +171,7 @@ func createDarc() *testDarc {
 	r := createAdminRule()
 	td.rules = append(td.rules, r.rule)
 	td.darc = NewDarc(&td.rules)
+	darcMap[string(td.darc.GetID())] = td.darc
 	return td
 }
 
