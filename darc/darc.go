@@ -259,19 +259,18 @@ func (d *Darc) RuleUpdateExpression(ruleind int, expression string) ([]*Rule, er
 	return *d.Rules, nil
 }
 
-func EvaluateExpression(expression string) {
+func EvaluateExpression(expression string, indexMap map[int]*Signature) (bool, error) {
 	in := []byte(expression)
 	var raw interface{}
 	json.Unmarshal(in, &raw)
-	ProcessJson(raw)
+	result, err := ProcessJson(raw, indexMap, false)
+	return result, err
 }
-
-var s string
 
 //For now, we just take a JSON expression and convert it into 
 // a string showing evaluation. This will be replaced by actual
 //evaluation when we introduce signatures
-func ProcessJson(raw interface{}) {
+func ProcessJson(raw interface{}, indexMap map[int]*Signature, evaluation bool) (bool, error) {
 	m := raw.(map[string]interface{})
 	for k, v := range(m) {
 		switch vv := v.(type) {
@@ -279,24 +278,53 @@ func ProcessJson(raw interface{}) {
 				for i, u := range vv {
 					switch x := u.(type) {
 						case map[string]interface {}:
-							ProcessJson(x)
-						case string: 
-						 	if i == 0 {
-								s += "(" + x
+							if i == 0 {
+								y, err := ProcessJson(x, indexMap, evaluation)
+								if err != nil {
+									return false, err
+								}
+								evaluation = y
 							} else {
-								s += " " + k + " " + x
-							} 
-							if i == len(vv) - 1 {
-								s += ")"
-							}							
-							fmt.Println(s)
-						default:
-							fmt.Println("Strange")
+								y, err := ProcessJson(x, indexMap, evaluation)
+								if err != nil {
+									return false, err
+								}
+								evaluation, err = operation(k, evaluation, y)
+								if err != nil {
+									return false, err
+								}
+							}
+						case float64: 
+						 	if i == 0 {
+						 		evaluation = checkMap(indexMap, int(x)) 
+							} else {
+								y, err := operation(k, evaluation, checkMap(indexMap, int(x)))
+								if err != nil {
+									return false, err
+								}
+								evaluation = y 
+							}
 					}
 				}
 			default:
-				fmt.Println("Why does it land here?")
+				return false, errors.New("Unknown type in expression interface.")
 		}
+	}
+	return evaluation, nil
+}
+
+func checkMap(indexMap map[int]*Signature, index int) bool {
+	_, exists := indexMap[index]
+	return exists
+}
+
+func operation(operand string, op1 bool, op2 bool) (bool, error) {
+	if operand == "and" {
+		return op1 && op2, nil
+	} else if operand == "or" {
+		return op1 || op2, nil
+	} else {
+		return false, errors.New("Unknown operand")
 	}
 }
 
@@ -363,6 +391,58 @@ func (s *Signer) GetPrivate() (abstract.Scalar, error) {
 	return nil, errors.New("signer is of unknown type")
 }
 
+//Verifying multisig requests
+func VerifyMultiSig(req *Request, sigs []*Signature, darcs map[string]*Darc) error {
+	var indexMap = make(map[int]*Signature)
+	targetDarc, err := FindDarc(darcs, req.DarcID)
+	if err != nil {
+		return err
+	}
+	rules := *targetDarc.Rules
+	targetRule, err := FindRule(rules, req.RuleID)
+	if err != nil {
+		return err
+	}
+	subs := *targetRule.Subjects
+	//Check if signatures are correct
+	for _, sig := range sigs {
+		if sig == nil || len(sig.Signature) == 0 {
+			return errors.New("No signature present")
+		}
+		rc := req.CopyReq()
+		b, err := protobuf.Encode(rc)
+		if err != nil {
+			return err
+		}
+		if b == nil {
+			return errors.New("Nothing to verify, message is empty.")
+		}
+		pub := sig.Signer.Point
+		err = sign.VerifySchnorr(network.Suite, pub, b, sig.Signature)
+		if err != nil {
+			return err
+		}
+		var pathIndex []int
+		signer := sig.Signer
+		pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
+		if err != nil {
+			return errors.New("Signature not in path.")
+		}
+		indexMap[pa[0]] = sig
+	}
+	//Evaluate expression
+	expression := targetRule.Expression 
+	evaluation, err := EvaluateExpression(expression, indexMap)
+	if err != nil {
+		return err
+	}
+	if evaluation {
+		return nil
+	} else {
+		return errors.New("Signatures don't satisfy expression.")
+	}
+}
+
 func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	//Check if signature is correct
 	if sig == nil || len(sig.Signature) == 0 {
@@ -410,7 +490,9 @@ func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
 			return err
 		}
 		subs := *(*targetDarc.Rules)[0].Subjects
-		err = FindSubject(subs, &Subject{PK: &signer}, darcs)
+		var pathIndex []int
+		pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
+		fmt.Println(pa)
 		return err
 	} else {
 		return errors.New("Empty Requester")
@@ -430,27 +512,32 @@ func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	}
 	requester := req.Requester 
 	subs := *targetRule.Subjects
-	err = FindSubject(subs, requester, darcs)
+	var pathIndex []int
+	pa, err := FindSubject(subs, requester, darcs, pathIndex)
+	fmt.Println(pa)
 	return err
 }
 
-func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc) error {
-	for _, s := range subjects {
+func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc, pathIndex []int) ([]int, error) {
+	for i, s := range subjects {
 		if s == requester {
-			return nil
+			pathIndex = append(pathIndex, i)
+			return pathIndex, nil
 		} else if s.Darc != nil {
 			targetDarc, err := FindDarc(darcs, s.Darc.ID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			subs := *(*targetDarc.Rules)[0].Subjects
-			err = FindSubject(subs, requester, darcs, )
+			pathIndex = append(pathIndex, i)
+			pa, err := FindSubject(subs, requester, darcs, pathIndex)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			return pa, nil
 		}
 	}
-	return errors.New("Subject not found")
+	return nil, errors.New("Subject not found")
 }
 
 func FindDarc(darcs map[string]*Darc, darcid ID) (*Darc, error) {
