@@ -406,6 +406,7 @@ func VerifyMultiSig(req *Request, sigs []*Signature, darcs map[string]*Darc) err
 	subs := *targetRule.Subjects
 	//Check if signatures are correct
 	for _, sig := range sigs {
+		//fmt.Println("Checking signature", i)
 		if sig == nil || len(sig.Signature) == 0 {
 			return errors.New("No signature present")
 		}
@@ -426,6 +427,7 @@ func VerifyMultiSig(req *Request, sigs []*Signature, darcs map[string]*Darc) err
 		signer := sig.Signer
 		pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
 		if err != nil {
+			fmt.Println(err)
 			return errors.New("Signature not in path.")
 		}
 		indexMap[pa[0]] = sig
@@ -518,9 +520,20 @@ func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	return err
 }
 
+func compareSubjects(s1 *Subject, s2 *Subject) bool {
+	if s1.PK != nil && s2.PK != nil {
+		if s1.PK.Point == s2.PK.Point {
+			return true
+		}
+	} else if s1.Darc != nil && s2.Darc != nil {
+			return s1.Darc.ID.Equal(s2.Darc.ID)
+	}
+	return false
+}
+
 func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc, pathIndex []int) ([]int, error) {
 	for i, s := range subjects {
-		if s == requester {
+		if compareSubjects(s, requester) == true {
 			pathIndex = append(pathIndex, i)
 			return pathIndex, nil
 		} else if s.Darc != nil {

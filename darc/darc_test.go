@@ -116,7 +116,7 @@ func TestRequest_Sign(t *testing.T) {
 }
 
 func TestRequest_Verify(t *testing.T) {
-	req, signer := createRequest()
+	req, signer := createRequest2()
 	sig, err := signer.Sign(req.request)
 	if err != nil {
 		log.ErrFatal(err)
@@ -125,7 +125,25 @@ func TestRequest_Verify(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println("Verification works")
+		fmt.Println("Single-sig Verification works")
+	}
+}
+
+func TestRequestMultiSig_Verify(t *testing.T) {
+	req, signers := createRequestMultiSig()
+	var signatures []*Signature
+	for _, signer := range signers {
+		sig, err := signer.Sign(req.request)
+		if err != nil {
+			log.ErrFatal(err)
+		}
+		signatures = append(signatures, sig)
+	}
+	err := VerifyMultiSig(req.request, signatures, darcMap)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Multi-sig Verification works")
 	}
 }
 
@@ -135,20 +153,6 @@ func TestDarc_IncrementVersion(t *testing.T) {
 	d.IncrementVersion()
 	require.NotEqual(t, previousVersion, d.Version)
 }
-
-/*
-func Test_EvaluateExpression() {	
-} 
-
-func TestSigner(t *testing.T) {
-}
-
-func TestRule(t *testing.T) {
-}
-
-func TestSubject(t *testing.T) {
-}
-*/
 
 var darcMap = make(map[string]*Darc)
 
@@ -205,6 +209,7 @@ func createSubject_Darc() *Subject {
 	rules = append(rules, rule)
 	darc := NewDarc(&rules)
 	id := darc.GetID()
+	darcMap[string(id)] = darc
 	subjectdarc := NewSubjectDarc(id)
 	subject, _ := NewSubject(subjectdarc, nil)
 	return subject
@@ -238,4 +243,36 @@ func createRequest() (*testRequest, *Signer) {
 	request := NewRequest(dr_id, 0, sub)
 	tr.request = request
 	return tr, sig
+}
+
+func createRequest2() (*testRequest, *Signer) {
+	tr := &testRequest{}
+	dr := createDarc().darc
+	dr_id := dr.GetID()
+	sub1 := createSubject_Darc()
+	dr.RuleAddSubject(0, sub1)
+	dr2 := darcMap[string(sub1.Darc.ID)]
+	sig, sub := createSignerSubject()
+	dr2.RuleAddSubject(0, sub)
+	request := NewRequest(dr_id, 0, sub)
+	tr.request = request
+	return tr, sig
+}
+
+func createRequestMultiSig() (*testRequest, []*Signer) {
+	tr := &testRequest{}
+	dr := createDarc().darc
+	dr_id := dr.GetID()
+	var requester *Subject
+	var signers []*Signer
+	for i := 0; i < 2; i++ {
+		sig, sub := createSignerSubject()
+		dr.RuleAddSubject(0, sub)
+		requester = sub
+		signers = append(signers, sig)
+	}
+	dr.RuleUpdateExpression(0, `{"and" : [3, 4]}`)
+	request := NewRequest(dr_id, 0, requester)
+	tr.request = request
+	return tr, signers
 }

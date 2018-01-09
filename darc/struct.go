@@ -24,9 +24,9 @@ type Rule struct {
 	Subjects *[]*Subject
 	//Expression to express fancy conjunctions.
 	//Of the format {"operator" : [indices]}
-	//Operators can be AND, OR
+	//Operators can be and, or
 	//Indices are the indices of the Subjects array
-	//Example {"AND" : [1, 2]} means Subjects[1] AND Subjects[2]
+	//Example {"and" : [1, 2]} means Subjects[1] AND Subjects[2]
 	Expression string
 }
 
