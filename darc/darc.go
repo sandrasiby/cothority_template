@@ -39,8 +39,7 @@ func NewDarc(rules *[]*Rule) *Darc {
 	}
 }
 
-//Use as Darc.NewRule
-func (d *Darc) NewRule(action string, subjects *[]*Subject, expression string) *Rule {
+func NewRule(action string, subjects *[]*Subject, expression string) *Rule {
 	var subs []*Subject
 	subs = append(subs, *subjects...)
 	return &Rule{
