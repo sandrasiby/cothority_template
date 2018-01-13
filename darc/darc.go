@@ -282,7 +282,15 @@ func ProcessJson(raw interface{}, indexMap map[int]*Signature, evaluation bool) 
 								if err != nil {
 									return false, err
 								}
-								evaluation = y
+								if i == len(vv)-1 {
+										z, err := operation(k, y, false)
+										if err != nil {
+											return false, err
+										}
+										evaluation = z
+									} else {
+										evaluation = y
+									}
 							} else {
 								y, err := ProcessJson(x, indexMap, evaluation)
 								if err != nil {
@@ -295,7 +303,15 @@ func ProcessJson(raw interface{}, indexMap map[int]*Signature, evaluation bool) 
 							}
 						case float64: 
 						 	if i == 0 {
-						 		evaluation = checkMap(indexMap, int(x)) 
+						 		if i == len(vv)-1 {
+						 				z, err := operation(k, checkMap(indexMap, int(x)), false)
+						 				if err != nil {
+											return false, err
+										}
+										evaluation = z
+						 			} else {
+						 				evaluation = checkMap(indexMap, int(x)) 
+						 			}
 							} else {
 								y, err := operation(k, evaluation, checkMap(indexMap, int(x)))
 								if err != nil {
@@ -322,17 +338,20 @@ func operation(operand string, op1 bool, op2 bool) (bool, error) {
 		return op1 && op2, nil
 	} else if operand == "or" {
 		return op1 || op2, nil
+	} else if operand == "not" {
+		return !op1, nil
 	} else {
 		return false, errors.New("Unknown operand")
 	}
 }
 
 // NewDarc initialises a darc-structure
-func NewRequest(darcid ID, ruleid int, requester *Subject) *Request {
+func NewRequest(darcid ID, ruleid int, requester *Subject, message []byte) *Request {
 	return &Request{
 		DarcID: darcid,
 		RuleID: ruleid,
 		Requester: requester,
+		Message: message,
 	}
 }
 
@@ -341,6 +360,7 @@ func (r *Request) CopyReq() *Request {
 		DarcID: r.DarcID,
 		RuleID: r.RuleID,
 		Requester: r.Requester,
+		Message: r.Message,
 	}
 	return rCopy
 }
@@ -472,7 +492,6 @@ func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	if err != nil {
 		return err
 	}
-	//Check expression
 	return err
 }
 
@@ -519,7 +538,7 @@ func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	return err
 }
 
-func compareSubjects(s1 *Subject, s2 *Subject) bool {
+func CompareSubjects(s1 *Subject, s2 *Subject) bool {
 	if s1.PK != nil && s2.PK != nil {
 		if s1.PK.Point == s2.PK.Point {
 			return true
@@ -532,7 +551,7 @@ func compareSubjects(s1 *Subject, s2 *Subject) bool {
 
 func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc, pathIndex []int) ([]int, error) {
 	for i, s := range subjects {
-		if compareSubjects(s, requester) == true {
+		if CompareSubjects(s, requester) == true {
 			pathIndex = append(pathIndex, i)
 			return pathIndex, nil
 		} else if s.Darc != nil {

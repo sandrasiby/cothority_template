@@ -3,6 +3,7 @@ package darc
 import (
 	"testing"
 	"fmt"
+	"encoding/json"
 
 //	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -125,6 +126,8 @@ func TestRequest_Verify(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	} else {
+		var raw interface{}
+    	json.Unmarshal(req.request.Message, &raw)
 		fmt.Println("Single-sig Verification works")
 	}
 }
@@ -143,6 +146,8 @@ func TestRequestMultiSig_Verify(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	} else {
+		var raw interface{}
+    	json.Unmarshal(req.request.Message, &raw)
 		fmt.Println("Multi-sig Verification works")
 	}
 }
@@ -240,7 +245,8 @@ func createRequest() (*testRequest, *Signer) {
 	dr_id := dr.GetID()
 	sig, sub := createSignerSubject()
 	dr.RuleAddSubject(0, sub)
-	request := NewRequest(dr_id, 0, sub)
+	msg, _ := json.Marshal("Document1")
+	request := NewRequest(dr_id, 0, sub, msg)
 	tr.request = request
 	return tr, sig
 }
@@ -254,7 +260,8 @@ func createRequest2() (*testRequest, *Signer) {
 	dr2 := darcMap[string(sub1.Darc.ID)]
 	sig, sub := createSignerSubject()
 	dr2.RuleAddSubject(0, sub)
-	request := NewRequest(dr_id, 0, sub)
+	msg, _ := json.Marshal("Document1")
+	request := NewRequest(dr_id, 0, sub, msg)
 	tr.request = request
 	return tr, sig
 }
@@ -272,7 +279,8 @@ func createRequestMultiSig() (*testRequest, []*Signer) {
 		signers = append(signers, sig)
 	}
 	dr.RuleUpdateExpression(0, `{"and" : [3, 4]}`)
-	request := NewRequest(dr_id, 0, requester)
+	msg, _ := json.Marshal(createDarc().darc)
+	request := NewRequest(dr_id, 0, requester, msg)
 	tr.request = request
 	return tr, signers
 }

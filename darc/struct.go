@@ -56,6 +56,8 @@ type Request struct {
 	RuleID int
 	//Requester's details
 	Requester *Subject
+	//Message - Can be a string or a marshalled JSON 
+	Message []byte
 }
 
 type Signature struct {
