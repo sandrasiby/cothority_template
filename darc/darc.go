@@ -346,11 +346,10 @@ func operation(operand string, op1 bool, op2 bool) (bool, error) {
 }
 
 // NewDarc initialises a darc-structure
-func NewRequest(darcid ID, ruleid int, requester *Subject, message []byte) *Request {
+func NewRequest(darcid ID, ruleid int, message []byte) *Request {
 	return &Request{
 		DarcID: darcid,
 		RuleID: ruleid,
-		Requester: requester,
 		Message: message,
 	}
 }
@@ -359,7 +358,6 @@ func (r *Request) CopyReq() *Request {
 	rCopy := &Request{
 		DarcID: r.DarcID,
 		RuleID: r.RuleID,
-		Requester: r.Requester,
 		Message: r.Message,
 	}
 	return rCopy
@@ -482,44 +480,15 @@ func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	if err != nil {
 		return err
 	}
-	//Check if path from rule to requester is correct
-	err = VerifyPath(darcs, req)
-	if err != nil {
-		return err
-	}
-	//Check that signer exists in the requester ID
-	err = VerifySigner(req, sig, darcs)
+	//Check if path from rule to signer is correct
+	err = VerifyPath(darcs, req, sig)
 	if err != nil {
 		return err
 	}
 	return err
 }
 
-func VerifySigner(req *Request, sig *Signature, darcs map[string]*Darc) error {
-	requester := req.Requester
-	signer := sig.Signer
-	if requester.PK != nil {
-		if *requester.PK == signer {
-			return nil
-		} else {
-			return errors.New("Signer not found in ID")
-		}
-	} else if requester.Darc != nil {
-		targetDarc, err := FindDarc(darcs, requester.Darc.ID)
-		if err != nil {
-			return err
-		}
-		subs := *(*targetDarc.Rules)[0].Subjects
-		var pathIndex []int
-		pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
-		fmt.Println(pa)
-		return err
-	} else {
-		return errors.New("Empty Requester")
-	}
-}
-
-func VerifyPath(darcs map[string]*Darc, req *Request) error {
+func VerifyPath(darcs map[string]*Darc, req *Request, sig *Signature) error {
 	//Find Darc from request DarcID
 	targetDarc, err := FindDarc(darcs, req.DarcID)
 	if err != nil {
@@ -530,10 +499,10 @@ func VerifyPath(darcs map[string]*Darc, req *Request) error {
 	if err != nil {
 		return err
 	}
-	requester := req.Requester 
+	signer := sig.Signer
 	subs := *targetRule.Subjects
 	var pathIndex []int
-	pa, err := FindSubject(subs, requester, darcs, pathIndex)
+	pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
 	fmt.Println(pa)
 	return err
 }
@@ -559,7 +528,16 @@ func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc
 			if err != nil {
 				return nil, err
 			}
-			subs := *(*targetDarc.Rules)[0].Subjects
+			ruleind := -1
+			for i, rule := range *targetDarc.Rules {
+				if rule.Action == "User" {
+					ruleind = i
+				}
+			}
+			if ruleind == -1 {
+				return nil, errors.New("User rule ID not found")
+			}
+			subs := *(*targetDarc.Rules)[ruleind].Subjects
 			pathIndex = append(pathIndex, i)
 			pa, err := FindSubject(subs, requester, darcs, pathIndex)
 			if err != nil {

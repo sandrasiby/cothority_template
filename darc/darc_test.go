@@ -101,7 +101,6 @@ func TestRequest_Copy(t *testing.T) {
 	req1.RuleID = 1000
 	require.NotEqual(t, req1.RuleID, req2.RuleID)
 	require.Equal(t, req1.DarcID, req2.DarcID)
-	require.Equal(t, req1.Requester, req2.Requester)
 	req2 = req1.CopyReq()
 	require.Equal(t, req1.RuleID, req2.RuleID)
 }
@@ -196,6 +195,18 @@ func createAdminRule() *testRule {
 	return tr
 }
 
+func createUserRule() *testRule {
+	tr := &testRule{}
+	action := "User"
+	expression := `{"and" : [0, 1]}`
+	for i := 0; i < 2; i++ {
+		s := createSubject_PK()
+		tr.subjects = append(tr.subjects, s)
+	}
+	tr.rule = &Rule{Action: action, Subjects: &tr.subjects, Expression: expression}
+	return tr
+}
+
 func createRule() *testRule {
 	tr := &testRule{}
 	action := "Read"
@@ -211,6 +222,8 @@ func createRule() *testRule {
 func createSubject_Darc() *Subject {
 	rule := createAdminRule().rule
 	var rules []*Rule
+	rules = append(rules, rule)
+	rule = createUserRule().rule
 	rules = append(rules, rule)
 	darc := NewDarc(&rules)
 	id := darc.GetID()
@@ -244,9 +257,9 @@ func createRequest() (*testRequest, *Signer) {
 	dr := createDarc().darc
 	dr_id := dr.GetID()
 	sig, sub := createSignerSubject()
-	dr.RuleAddSubject(0, sub)
+	dr.RuleAddSubject(1, sub)
 	msg, _ := json.Marshal("Document1")
-	request := NewRequest(dr_id, 0, sub, msg)
+	request := NewRequest(dr_id, 0, msg)
 	tr.request = request
 	return tr, sig
 }
@@ -259,9 +272,9 @@ func createRequest2() (*testRequest, *Signer) {
 	dr.RuleAddSubject(0, sub1)
 	dr2 := darcMap[string(sub1.Darc.ID)]
 	sig, sub := createSignerSubject()
-	dr2.RuleAddSubject(0, sub)
+	dr2.RuleAddSubject(1, sub)
 	msg, _ := json.Marshal("Document1")
-	request := NewRequest(dr_id, 0, sub, msg)
+	request := NewRequest(dr_id, 0, msg)
 	tr.request = request
 	return tr, sig
 }
@@ -270,17 +283,15 @@ func createRequestMultiSig() (*testRequest, []*Signer) {
 	tr := &testRequest{}
 	dr := createDarc().darc
 	dr_id := dr.GetID()
-	var requester *Subject
 	var signers []*Signer
 	for i := 0; i < 2; i++ {
 		sig, sub := createSignerSubject()
 		dr.RuleAddSubject(0, sub)
-		requester = sub
 		signers = append(signers, sig)
 	}
 	dr.RuleUpdateExpression(0, `{"and" : [3, 4]}`)
 	msg, _ := json.Marshal(createDarc().darc)
-	request := NewRequest(dr_id, 0, requester, msg)
+	request := NewRequest(dr_id, 0, msg)
 	tr.request = request
 	return tr, signers
 }

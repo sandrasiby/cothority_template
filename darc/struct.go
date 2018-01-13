@@ -54,8 +54,6 @@ type Request struct {
 	DarcID ID
 	//ID showing allowed rule
 	RuleID int
-	//Requester's details
-	Requester *Subject
 	//Message - Can be a string or a marshalled JSON 
 	Message []byte
 }
