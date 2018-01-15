@@ -10,7 +10,7 @@ package darc
 
 import (
 	"errors"
-	"fmt"
+	//"fmt"
 
 	"bytes"
 	"strings"
@@ -423,7 +423,6 @@ func VerifyMultiSig(req *Request, sigs []*Signature, darcs map[string]*Darc) err
 	subs := *targetRule.Subjects
 	//Check if signatures are correct
 	for _, sig := range sigs {
-		//fmt.Println("Checking signature", i)
 		if sig == nil || len(sig.Signature) == 0 {
 			return errors.New("No signature present")
 		}
@@ -444,7 +443,7 @@ func VerifyMultiSig(req *Request, sigs []*Signature, darcs map[string]*Darc) err
 		signer := sig.Signer
 		pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
 		if err != nil {
-			fmt.Println(err)
+			//fmt.Println(err)
 			return errors.New("Signature not in path.")
 		}
 		indexMap[pa[0]] = sig
@@ -502,8 +501,8 @@ func VerifyPath(darcs map[string]*Darc, req *Request, sig *Signature) error {
 	signer := sig.Signer
 	subs := *targetRule.Subjects
 	var pathIndex []int
-	pa, err := FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
-	fmt.Println(pa)
+	_, err = FindSubject(subs, &Subject{PK: &signer}, darcs, pathIndex)
+	//fmt.Println(pa)
 	return err
 }
 
@@ -519,6 +518,7 @@ func CompareSubjects(s1 *Subject, s2 *Subject) bool {
 }
 
 func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc, pathIndex []int) ([]int, error) {
+	//fmt.Println(pathIndex)
 	for i, s := range subjects {
 		if CompareSubjects(s, requester) == true {
 			pathIndex = append(pathIndex, i)
@@ -541,9 +541,10 @@ func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc
 			pathIndex = append(pathIndex, i)
 			pa, err := FindSubject(subs, requester, darcs, pathIndex)
 			if err != nil {
-				return nil, err
+				pathIndex = pathIndex[:len(pathIndex)-1]
+			} else {
+				return pa, nil
 			}
-			return pa, nil
 		}
 	}
 	return nil, errors.New("Subject not found")

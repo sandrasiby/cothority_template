@@ -158,6 +158,83 @@ func TestDarc_IncrementVersion(t *testing.T) {
 	require.NotEqual(t, previousVersion, d.Version)
 }
 
+func benchmarkRequest_Verify(depth int, b *testing.B) {
+	req, signer := createRequestAtDepth(depth)
+	sig, err := signer.Sign(req.request)
+	if err != nil {
+		log.ErrFatal(err)
+	}
+	failed := 0
+	for n := 0; n < b.N; n++ {
+		err = Verify(req.request, sig, darcMap)
+		if err != nil {
+			failed += 1
+		}
+	}
+}
+
+// func BenchmarkRequest_Verify1(b *testing.B)  { benchmarkRequest_Verify(1, b) }
+// func BenchmarkRequest_Verify2(b *testing.B)  { benchmarkRequest_Verify(2, b) }
+// func BenchmarkRequest_Verify5(b *testing.B)  { benchmarkRequest_Verify(5, b) }
+// func BenchmarkRequest_Verify10(b *testing.B)  { benchmarkRequest_Verify(10, b) }
+// func BenchmarkRequest_Verify20(b *testing.B)  { benchmarkRequest_Verify(20, b) }
+// func BenchmarkRequest_Verify50(b *testing.B)  { benchmarkRequest_Verify(50, b) }
+// func BenchmarkRequest_Verify100(b *testing.B)  { benchmarkRequest_Verify(100, b) }
+
+// func TestRequestMultiSig_VerifyAtDepth(t *testing.T) {
+// 	req, signers  := createRequestMultiSigAtDepthNum(2, 1)
+// 	var signatures []*Signature
+// 	for _, signer := range signers {
+// 		sig, err := signer.Sign(req.request)
+// 		if err != nil {
+// 			log.ErrFatal(err)
+// 		}
+// 		signatures = append(signatures, sig)
+// 	}
+// 	err := VerifyMultiSig(req.request, signatures, darcMap)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	} else {
+// 		var raw interface{}
+//     	json.Unmarshal(req.request.Message, &raw)
+// 		fmt.Println("Multi-sig Verification works")
+// 	}
+// }
+
+func benchmarkRequestMultiSig_Verify(numsigs int, depth int, b *testing.B) {
+	req, signers := createRequestMultiSigAtDepthNum(numsigs, depth)
+	var signatures []*Signature
+	for _, signer := range signers {
+		sig, err := signer.Sign(req.request)
+		if err != nil {
+			log.ErrFatal(err)
+		}
+		signatures = append(signatures, sig)
+	}
+	//failed := 0
+	for n := 0; n < b.N; n++ {
+		_ = VerifyMultiSig(req.request, signatures, darcMap)
+		// if err != nil {
+		// 	failed += 1
+		// }
+	}
+	//fmt.Println(failed)
+}
+
+func BenchmarkRequestMultiSig_Verify2_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 2, b) }
+func BenchmarkRequestMultiSig_Verify5_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 2, b) }
+func BenchmarkRequestMultiSig_Verify10_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 2, b) }
+func BenchmarkRequestMultiSig_Verify20_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 2, b) }
+func BenchmarkRequestMultiSig_Verify50_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 2, b) }
+func BenchmarkRequestMultiSig_Verify100_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 2, b) }
+
+func BenchmarkRequestMultiSig_Verify2_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 10, b) }
+func BenchmarkRequestMultiSig_Verify5_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 10, b) }
+func BenchmarkRequestMultiSig_Verify10_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 10, b) }
+func BenchmarkRequestMultiSig_Verify20_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 10, b) }
+func BenchmarkRequestMultiSig_Verify50_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 10, b) }
+func BenchmarkRequestMultiSig_Verify100_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 10, b) }
+
 var darcMap = make(map[string]*Darc)
 
 type testDarc struct {
@@ -177,6 +254,8 @@ type testRequest struct {
 func createDarc() *testDarc {
 	td := &testDarc{}
 	r := createAdminRule()
+	td.rules = append(td.rules, r.rule)
+	r = createUserRule()
 	td.rules = append(td.rules, r.rule)
 	td.darc = NewDarc(&td.rules)
 	darcMap[string(td.darc.GetID())] = td.darc
@@ -277,6 +356,47 @@ func createRequest2() (*testRequest, *Signer) {
 	request := NewRequest(dr_id, 0, msg)
 	tr.request = request
 	return tr, sig
+}
+
+func createRequestAtDepth(depth int) (*testRequest, *Signer) {
+	tr := &testRequest{}
+	dr := createDarc().darc
+	cur_darc := dr
+	dr_id := dr.GetID()
+	for i := 0; i < depth; i++ {
+		sub1 := createSubject_Darc()
+		cur_darc.RuleAddSubject(1, sub1)
+		cur_darc = darcMap[string(sub1.Darc.ID)]
+	}
+	sig, sub := createSignerSubject()
+	cur_darc.RuleAddSubject(1, sub)
+	msg, _ := json.Marshal("Document1")
+	request := NewRequest(dr_id, 1, msg)
+	tr.request = request
+	return tr, sig
+}
+
+func createRequestMultiSigAtDepthNum(numsigs int, depth int) (*testRequest, []*Signer) {
+	tr := &testRequest{}
+	dr := createDarc().darc
+	dr_id := dr.GetID()
+	var signers []*Signer
+	for i := 0; i < numsigs; i++ {
+		cur_darc := dr
+		for j := 0; j < depth; j++ {
+			sub1 := createSubject_Darc()
+			cur_darc.RuleAddSubject(1, sub1)
+			cur_darc = darcMap[string(sub1.Darc.ID)]
+		}
+		sig, sub := createSignerSubject()
+		cur_darc.RuleAddSubject(1, sub)
+		signers = append(signers, sig)
+	}
+	dr.RuleUpdateExpression(1, `{"and" : [2, 3]}`)
+	msg, _ := json.Marshal("Document1")
+	request := NewRequest(dr_id, 1, msg)
+	tr.request = request
+	return tr, signers
 }
 
 func createRequestMultiSig() (*testRequest, []*Signer) {
