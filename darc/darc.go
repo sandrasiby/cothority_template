@@ -608,7 +608,7 @@ func VerifyPath(darcs map[string]*Darc, req *Request, sig *SignaturePath) error 
 			return err
 		}
 		subs := *(*current_darc.Rules)[ruleind].Subjects
-		if i > len(subs) {
+		if path[i] > len(subs) {
 			return errors.New("Path is incorrect.")
 		}
 		target := subs[path[i]]

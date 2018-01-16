@@ -4,7 +4,6 @@ import (
 	"testing"
 	"fmt"
 	"encoding/json"
-
 //	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/dedis/onet.v1/log"
@@ -194,6 +193,36 @@ func TestDarc_IncrementVersion(t *testing.T) {
 	require.NotEqual(t, previousVersion, d.Version)
 }
 
+func benchmarkRequest_SignWithPathCheck(total int, depth int, b *testing.B) {
+	req, signer := createRequestMultiPathAtDepth(total, depth)
+	multipaths := 0
+	for n := 0; n < b.N; n++ {
+		_, pa, err := signer.SignWithPathCheck(req.request, darcMap)
+		if err != nil {
+			//fmt.Println(err)
+			if pa != nil {
+				//fmt.Println(pa)
+				multipaths += 1
+			}
+		} 
+	}
+	//fmt.Println(multipaths)
+} 
+
+//func BenchmarkRequest_SignWithPathCheck2_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(2, 2, b) }
+// func BenchmarkRequest_SignWithPathCheck5_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(5, 2, b) }
+// func BenchmarkRequest_SignWithPathCheck10_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(10, 2, b) }
+// func BenchmarkRequest_SignWithPathCheck20_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(20, 2, b) }
+// func BenchmarkRequest_SignWithPathCheck50_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(50, 2, b) }
+// func BenchmarkRequest_SignWithPathCheck100_2(b *testing.B)  { benchmarkRequest_SignWithPathCheck(100, 2, b) }
+
+// func BenchmarkRequest_SignWithPathCheck2_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(2, 10, b) }
+// func BenchmarkRequest_SignWithPathCheck5_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(5, 10, b) }
+// func BenchmarkRequest_SignWithPathCheck10_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(10, 10, b) }
+// func BenchmarkRequest_SignWithPathCheck20_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(20, 10, b) }
+// func BenchmarkRequest_SignWithPathCheck50_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(50, 10, b) }
+// func BenchmarkRequest_SignWithPathCheck100_10(b *testing.B)  { benchmarkRequest_SignWithPathCheck(100, 10, b) }
+
 func benchmarkRequest_Verify(depth int, b *testing.B) {
 	req, signer := createRequestAtDepth(depth)
 	sig, err := signer.Sign(req.request)
@@ -236,6 +265,44 @@ func benchmarkRequest_Verify(depth int, b *testing.B) {
 // 		fmt.Println("Multi-sig Verification works")
 // 	}
 // }
+
+func benchmarkRequest_VerifySigWithPath(total int, depth int, b *testing.B) {
+	req, signer := createRequestMultiPathAtDepth(total, depth)
+	_, pa, err := signer.SignWithPathCheck(req.request, darcMap)
+	fail := 0
+	if err != nil {
+		//fmt.Println(err)
+		if pa != nil {
+			//fmt.Println(pa[0])
+			sig, err := signer.SignWithPath(req.request, pa[0])
+			if err != nil {
+				fmt.Println(err)
+			}
+			for n := 0; n < b.N; n++ {
+				err = VerifySigWithPath(req.request, sig, darcMap)
+				if err != nil {
+					fail += 1
+					//fmt.Println(err)
+				} 
+			}
+		}
+	}
+	//fmt.Println("Fail", fail)
+}
+
+// func BenchmarkRequest_VerifySigWithPath2_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(2, 2, b) }
+// func BenchmarkRequest_VerifySigWithPath5_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(5, 2, b) }
+// func BenchmarkRequest_VerifySigWithPath10_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(10, 2, b) }
+// func BenchmarkRequest_VerifySigWithPath20_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(20, 2, b) }
+// func BenchmarkRequest_VerifySigWithPath50_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(50, 2, b) }
+// func BenchmarkRequest_VerifySigWithPath100_2(b *testing.B)  { benchmarkRequest_VerifySigWithPath(100, 2, b) }
+
+func BenchmarkRequest_VerifySigWithPath2_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(2, 10, b) }
+func BenchmarkRequest_VerifySigWithPath5_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(5, 10, b) }
+func BenchmarkRequest_VerifySigWithPath10_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(10, 10, b) }
+func BenchmarkRequest_VerifySigWithPath20_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(20, 10, b) }
+func BenchmarkRequest_VerifySigWithPath50_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(50, 10, b) }
+func BenchmarkRequest_VerifySigWithPath100_10(b *testing.B)  { benchmarkRequest_VerifySigWithPath(100, 10, b) }
 
 func benchmarkRequestMultiSig_Verify(numsigs int, depth int, b *testing.B) {
 	req, signers := createRequestMultiSigAtDepthNum(numsigs, depth)
@@ -406,6 +473,35 @@ func createRequestAtDepth(depth int) (*testRequest, *Signer) {
 	}
 	sig, sub := createSignerSubject()
 	cur_darc.RuleAddSubject(1, sub)
+	msg, _ := json.Marshal("Document1")
+	request := NewRequest(dr_id, 1, msg)
+	tr.request = request
+	return tr, sig
+}
+
+func createRequestMultiPathAtDepth(total int, depth int) (*testRequest, *Signer) {
+	tr := &testRequest{}
+	dr := createDarc().darc
+	dr_id := dr.GetID()
+	cur_darc := dr
+	for i := 0; i < total*2; i++ {
+		sub := createSubject_Darc()
+		cur_darc.RuleAddSubject(1, sub)
+	}
+	rule := (*dr.Rules)[1]
+	subs := *rule.Subjects
+	sig, subject := createSignerSubject()
+	for i := 2; i < total*2; i+=2 {
+		sub2 := subs[i]
+		sub_darc := *sub2.Darc
+		cur_darc := darcMap[string(sub_darc.ID)]
+		for j := 0; j < depth; j++ {
+			sub1 := createSubject_Darc()
+			cur_darc.RuleAddSubject(1, sub1)
+			cur_darc = darcMap[string(sub1.Darc.ID)]
+		}
+		cur_darc.RuleAddSubject(1, subject)
+	}
 	msg, _ := json.Marshal("Document1")
 	request := NewRequest(dr_id, 1, msg)
 	tr.request = request
