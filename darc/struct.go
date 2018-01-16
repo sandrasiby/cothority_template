@@ -48,7 +48,6 @@ type SubjectDarc struct {
 	ID ID
 }
 
-//To-do: Request for change to a darc?
 type Request struct {
 	//ID of the Darc having the access control policy
 	DarcID ID
@@ -61,6 +60,12 @@ type Request struct {
 type Signature struct {
 	Signature []byte
 	Signer SubjectPK
+}
+
+type SignaturePath struct {
+	Signature []byte
+	Signer SubjectPK
+	Path []int
 }
 
 // Signer is a generic structure that can hold different types of signers

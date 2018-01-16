@@ -388,6 +388,76 @@ func (s *Signer) Sign(req *Request) (*Signature, error) {
 	return nil, errors.New("signer is of unknown type")
 }
 
+func (s *Signer) SignWithPath(req *Request, path []int) (*SignaturePath, error) {
+	rc := req.CopyReq()
+	b, err := protobuf.Encode(rc)
+	if err != nil {
+		return nil, err
+	}
+	if b == nil {
+		return nil, errors.New("nothing to sign, message is empty")
+	}
+	if s.Ed25519 != nil {
+		key, err := s.GetPrivate()
+		if err != nil {
+			return nil, errors.New("could not retrieve a private key")
+		}
+		pub, err := s.GetPublic()
+		if err != nil {
+			return nil, errors.New("could not retrieve a public key")
+		}
+		signature, _ := sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+		signer := &SubjectPK{Point: pub}
+		return &SignaturePath{Signature: signature, Signer: *signer, Path: path}, nil
+	}
+	return nil, errors.New("signer is of unknown type")
+}
+
+func (s *Signer) SignWithPathCheck(req *Request, darcs map[string]*Darc) (*Signature, [][]int, error) {
+	rc := req.CopyReq()
+	b, err := protobuf.Encode(rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	if b == nil {
+		return nil, nil, errors.New("nothing to sign, message is empty")
+	}
+	if s.Ed25519 != nil {
+		key, err := s.GetPrivate()
+		if err != nil {
+			return nil, nil, errors.New("could not retrieve a private key")
+		}
+		pub, err := s.GetPublic()
+		if err != nil {
+			return nil, nil, errors.New("could not retrieve a public key")
+		}
+		var pathindex []int
+		var paths [][]int
+		sub := &SubjectPK{Point: pub}
+		targetDarc, err := FindDarc(darcs, req.DarcID)
+		if err != nil {
+			return nil, nil, err
+		}
+		rules := *targetDarc.Rules
+		targetRule, err := FindRule(rules, req.RuleID)
+		if err != nil {
+			return nil, nil, err
+		}
+		subs := *targetRule.Subjects
+		paths, err = FindAllPaths(subs, &Subject{PK: sub}, darcs, pathindex, paths)
+		if err != nil {
+			return nil, nil, errors.New("There does not seem to be a valid path from target darc to signer")
+		}
+		if len(paths) > 1 {
+			return nil, paths, errors.New("Multiple paths present. Sign with specific path.")
+		}
+		signature, _ := sign.Schnorr(ed25519.NewAES128SHA256Ed25519(false), key, b)
+		signer := &SubjectPK{Point: pub}
+		return &Signature{Signature: signature, Signer: *signer}, nil, nil
+	}
+	return nil, nil, errors.New("signer is of unknown type")
+}
+
 func (s *Signer) GetPublic() (abstract.Point, error) {
 	if s.Ed25519 != nil {
 		if s.Ed25519.Point != nil {
@@ -480,6 +550,32 @@ func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 		return err
 	}
 	//Check if path from rule to signer is correct
+	err = GetPath(darcs, req, sig)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+func VerifySigWithPath(req *Request, sig *SignaturePath, darcs map[string]*Darc) error {
+	//Check if signature is correct
+	if sig == nil || len(sig.Signature) == 0 {
+		return errors.New("No signature available")
+	}
+	rc := req.CopyReq()
+	b, err := protobuf.Encode(rc)
+	if err != nil {
+		return err
+	}
+	if b == nil {
+		return errors.New("nothing to verify, message is empty")
+	}
+	pub := sig.Signer.Point
+	err = sign.VerifySchnorr(network.Suite, pub, b, sig.Signature)
+	if err != nil {
+		return err
+	}
+	//Check if path from rule to signer is correct
 	err = VerifyPath(darcs, req, sig)
 	if err != nil {
 		return err
@@ -487,7 +583,46 @@ func Verify(req *Request, sig *Signature, darcs map[string]*Darc) error {
 	return err
 }
 
-func VerifyPath(darcs map[string]*Darc, req *Request, sig *Signature) error {
+func VerifyPath(darcs map[string]*Darc, req *Request, sig *SignaturePath) error {
+	path := sig.Path
+	subject := &Subject{PK: &sig.Signer}
+	current_darc, err := FindDarc(darcs, req.DarcID)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(path); i++ {
+		if i == len(path) - 1 {
+			ruleind, err := FindUserRuleIndex(*current_darc.Rules)
+			if err != nil {
+				return err
+			}
+			subs := *(*current_darc.Rules)[ruleind].Subjects
+			target_sub := subs[path[i]]
+			if CompareSubjects(target_sub, subject) {
+				return nil
+			}
+		}
+		//fmt.Println(i, path[i])
+		ruleind, err := FindUserRuleIndex(*current_darc.Rules)
+		if err != nil {
+			return err
+		}
+		subs := *(*current_darc.Rules)[ruleind].Subjects
+		if i > len(subs) {
+			return errors.New("Path is incorrect.")
+		}
+		target := subs[path[i]]
+		target_darc := *target.Darc
+		target_id := target_darc.ID 
+		current_darc, err = FindDarc(darcs, target_id)
+		if err != nil {
+			return err
+		}
+	}
+	return errors.New("Path is incorrect.")
+}
+
+func GetPath(darcs map[string]*Darc, req *Request, sig *Signature) error {
 	//Find Darc from request DarcID
 	targetDarc, err := FindDarc(darcs, req.DarcID)
 	if err != nil {
@@ -528,13 +663,8 @@ func FindSubject(subjects []*Subject, requester *Subject, darcs map[string]*Darc
 			if err != nil {
 				return nil, err
 			}
-			ruleind := -1
-			for i, rule := range *targetDarc.Rules {
-				if rule.Action == "User" {
-					ruleind = i
-				}
-			}
-			if ruleind == -1 {
+			ruleind, err := FindUserRuleIndex(*targetDarc.Rules)
+			if err != nil {
 				return nil, errors.New("User rule ID not found")
 			}
 			subs := *(*targetDarc.Rules)[ruleind].Subjects
@@ -563,7 +693,58 @@ func FindRule(rules []*Rule, ruleid int) (*Rule, error) {
 		return nil, errors.New("Invalid RuleID in request")
 	}
 	return rules[ruleid], nil
-} 
+}
+
+func FindUserRuleIndex(rules []*Rule) (int, error) {
+	ruleind := -1
+	for i, rule := range rules {
+		if rule.Action == "User" {
+			ruleind = i
+		}
+	}
+	if ruleind == -1 {
+		return ruleind, errors.New("User rule ID not found")
+	}
+	return ruleind, nil
+}
+
+func FindAllPaths(subjects []*Subject, requester *Subject, darcs map[string]*Darc, pathIndex []int, allpaths [][]int) ([][]int, error) {
+	l := len(allpaths)
+	for i, s := range subjects {
+		if CompareSubjects(s, requester) == true {
+			pathIndex = append(pathIndex, i)
+			allpaths = append(allpaths, pathIndex)
+		} else if s.Darc != nil {
+			targetDarc, err := FindDarc(darcs, s.Darc.ID)
+			if err != nil {
+				return nil, err
+			}
+			ruleind := -1
+			for i, rule := range *targetDarc.Rules {
+				if rule.Action == "User" {
+					ruleind = i
+				}
+			}
+			if ruleind == -1 {
+				return nil, errors.New("User rule ID not found")
+			}
+			subs := *(*targetDarc.Rules)[ruleind].Subjects
+			pathIndex = append(pathIndex, i)
+			pa, err := FindAllPaths(subs, requester, darcs, pathIndex, allpaths)
+			if err != nil {
+				pathIndex = pathIndex[:len(pathIndex)-1]
+			} else {
+				allpaths = pa
+				pathIndex  = pathIndex[:0]
+			}
+		}
+	}
+	if len(allpaths) > l {
+		return allpaths, nil
+	} else {
+		return nil, errors.New("No path found")
+	}
+}
 
 // NewEd25519Signer initializes a new Ed25519Signer given a public and private keys.
 // If any of the given values is nil or both are nil, then a new key pair is generated.

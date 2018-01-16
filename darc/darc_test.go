@@ -110,9 +110,21 @@ func TestRequest_Sign(t *testing.T) {
 	req := r.request
 	_, err := signer.Sign(req)
 	if err != nil {
-		log.ErrFatal(err)
+		fmt.Println(err)
 	}
 	//fmt.Println("Signature:", sig.Signature)
+}
+
+func TestRequest_SignWithPathCheck(t *testing.T) {
+	r, signer := createRequestMultiPath()
+	req := r.request
+	_, pa, err := signer.SignWithPathCheck(req, darcMap)
+	if err != nil {
+		fmt.Println(err)
+		if pa != nil {
+			fmt.Println(pa)
+		}
+	} 
 }
 
 func TestRequest_Verify(t *testing.T) {
@@ -128,6 +140,30 @@ func TestRequest_Verify(t *testing.T) {
 		var raw interface{}
     	json.Unmarshal(req.request.Message, &raw)
 		fmt.Println("Single-sig Verification works")
+	}
+}
+
+func TestRequest_VerifySigWithPath(t *testing.T) {
+	r, signer := createRequestMultiPath()
+	req := r.request
+	_, pa, err := signer.SignWithPathCheck(req, darcMap)
+	if err != nil {
+		fmt.Println(err)
+		if pa != nil {
+			//fmt.Println(pa[0])
+			sig, err := signer.SignWithPath(req, pa[0])
+			if err != nil {
+				fmt.Println(err)
+			}
+			err = VerifySigWithPath(req, sig, darcMap)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				var raw interface{}
+		    	json.Unmarshal(req.Message, &raw)
+				fmt.Println("Single-sig Verification with path works")
+			}
+		}
 	}
 }
 
@@ -221,19 +257,19 @@ func benchmarkRequestMultiSig_Verify(numsigs int, depth int, b *testing.B) {
 	//fmt.Println(failed)
 }
 
-func BenchmarkRequestMultiSig_Verify2_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 2, b) }
-func BenchmarkRequestMultiSig_Verify5_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 2, b) }
-func BenchmarkRequestMultiSig_Verify10_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 2, b) }
-func BenchmarkRequestMultiSig_Verify20_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 2, b) }
-func BenchmarkRequestMultiSig_Verify50_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 2, b) }
-func BenchmarkRequestMultiSig_Verify100_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 2, b) }
+// func BenchmarkRequestMultiSig_Verify2_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 2, b) }
+// func BenchmarkRequestMultiSig_Verify5_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 2, b) }
+// func BenchmarkRequestMultiSig_Verify10_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 2, b) }
+// func BenchmarkRequestMultiSig_Verify20_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 2, b) }
+// func BenchmarkRequestMultiSig_Verify50_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 2, b) }
+// func BenchmarkRequestMultiSig_Verify100_2(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 2, b) }
 
-func BenchmarkRequestMultiSig_Verify2_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 10, b) }
-func BenchmarkRequestMultiSig_Verify5_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 10, b) }
-func BenchmarkRequestMultiSig_Verify10_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 10, b) }
-func BenchmarkRequestMultiSig_Verify20_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 10, b) }
-func BenchmarkRequestMultiSig_Verify50_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 10, b) }
-func BenchmarkRequestMultiSig_Verify100_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 10, b) }
+// func BenchmarkRequestMultiSig_Verify2_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(2, 10, b) }
+// func BenchmarkRequestMultiSig_Verify5_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(5, 10, b) }
+// func BenchmarkRequestMultiSig_Verify10_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(10, 10, b) }
+// func BenchmarkRequestMultiSig_Verify20_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(20, 10, b) }
+// func BenchmarkRequestMultiSig_Verify50_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(50, 10, b) }
+// func BenchmarkRequestMultiSig_Verify100_10(b *testing.B)  { benchmarkRequestMultiSig_Verify(100, 10, b) }
 
 var darcMap = make(map[string]*Darc)
 
@@ -414,4 +450,36 @@ func createRequestMultiSig() (*testRequest, []*Signer) {
 	request := NewRequest(dr_id, 0, msg)
 	tr.request = request
 	return tr, signers
+}
+
+func createRequestMultiPath() (*testRequest, *Signer) {
+	tr := &testRequest{}
+	dr_id, sig := createMultiPathSubject()
+	msg, _ := json.Marshal(createDarc().darc)
+	request := NewRequest(dr_id, 1, msg)
+	tr.request = request
+	return tr, sig
+}
+
+func createMultiPathSubject() ([]byte, *Signer) {
+	dedis := createDarc().darc
+	dr_id := dedis.GetID()
+	research := createSubject_Darc()
+	software := createSubject_Darc()
+	engineering := createSubject_Darc()
+	sandra := createSubject_Darc()
+	sig, linus := createSignerSubject()
+	dedis.RuleAddSubject(1, research)
+	dedis.RuleAddSubject(1, software)
+	dedis.RuleAddSubject(1, engineering)
+	dedis.RuleAddSubject(1, linus)
+	rsub := darcMap[string(research.Darc.ID)]
+	rsub.RuleAddSubject(1, sandra)
+	sandrasub := darcMap[string(sandra.Darc.ID)]
+	sandrasub.RuleAddSubject(1, linus)
+	swsub := darcMap[string(software.Darc.ID)]
+	swsub.RuleAddSubject(1, linus)
+	engsub := darcMap[string(engineering.Darc.ID)]
+	engsub.RuleAddSubject(1, linus)
+	return dr_id, sig
 }
